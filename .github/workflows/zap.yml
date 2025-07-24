@@ -1,12 +1,12 @@
 name: ZAP Security Scan
 
-# トリガー設定（いつ実行するか）
+# トリガー設定
 on:
-   push:
-     branches: [ main, develop ]  # mainまたはdevelopブランチにプッシュ時
-   pull_request:
-     branches: [ main ]           # mainブランチへのPR作成時
-   workflow_dispatch:             # 手動実行も可能
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   zap_scan:
@@ -18,40 +18,78 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    # 2. Node.jsのセットアップ
+    # 2. Node.jsのセットアップ（キャッシュなし版）
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-        cache: 'npm'
+        # package-lock.jsonがない場合はcache設定を削除
     
     # 3. 依存関係のインストール
     - name: Install dependencies
-      run: npm ci
+      run: |
+        echo "Installing dependencies..."
+        npm install
+        echo "Dependencies installed successfully"
     
     # 4. Juice Shopアプリケーションをバックグラウンドで起動
     - name: Start Juice Shop
       run: |
-        npm start &
+        echo "Starting Juice Shop application..."
+        NODE_OPTIONS="--max-old-space-size=4096" npm start &
         echo "Waiting for application to start..."
-        sleep 30
-        curl -f http://localhost:3000 || exit 1
+        
+        # アプリケーションが起動するまで待機（最大2分）
+        for i in {1..24}; do
+          if curl -f http://localhost:3000 >/dev/null 2>&1; then
+            echo "Application is ready!"
+            break
+          fi
+          echo "Waiting... ($i/24)"
+          sleep 5
+        done
+        
+        # 最終確認
+        curl -f http://localhost:3000 || {
+          echo "Failed to start application"
+          exit 1
+        }
     
-    # 5. ZAPベースライン診断の実行
+    # 5. アプリケーションの動作確認
+    - name: Verify application
+      run: |
+        echo "Verifying application status..."
+        curl -I http://localhost:3000
+        echo "Application verification completed"
+    
+    # 6. ZAPベースライン診断の実行
     - name: ZAP Baseline Scan
       uses: zaproxy/action-baseline@v0.12.0
       with:
         target: 'http://localhost:3000'
         rules_file_name: '.zap/rules.tsv'
-        cmd_options: '-a'
+        cmd_options: '-a -m 10'  # -a: 受動スキャン, -m: 最大10分
     
-    # 6. ZAP結果をアーティファクトとして保存
+    # 7. ZAP結果をアーティファクトとして保存
     - name: Upload ZAP results
       uses: actions/upload-artifact@v4
-      if: always()
+      if: always()  # エラーが発生しても結果を保存
       with:
-        name: zap-results
+        name: zap-results-${{ github.run_number }}
         path: |
           report_html.html
           report_md.md
           report_json.json
+        retention-days: 30  # 30日間保存
+    
+    # 8. 簡易結果表示（オプション）
+    - name: Display scan summary
+      if: always()
+      run: |
+        echo "=== ZAP Scan Summary ==="
+        if [ -f "report_md.md" ]; then
+          echo "Report generated successfully"
+          wc -l report_md.md
+        else
+          echo "Report file not found"
+        fi
