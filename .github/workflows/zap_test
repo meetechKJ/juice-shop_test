@@ -2,8 +2,8 @@ name: ZAP Security Scan
 
 # トリガー設定（いつ実行するか）
 on:
-  # push:
-  #   branches: [ main, develop ]  # mainまたはdevelopブランチにプッシュ時
+   push:
+     branches: [ main, develop ]  # mainまたはdevelopブランチにプッシュ時
   # pull_request:
   #   branches: [ main ]           # mainブランチへのPR作成時
   # schedule:
