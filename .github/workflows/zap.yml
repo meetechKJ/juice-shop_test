@@ -6,8 +6,8 @@ on:
      branches: [ main, develop ]  # mainまたはdevelopブランチにプッシュ時
    pull_request:
      branches: [ main ]           # mainブランチへのPR作成時
-  # schedule:
-  #   - cron: '0 2 * * 1'         # 毎週月曜日の午前2時（UTC）に実行
+# schedule:
+#   - cron: '0 2 * * 1'          毎週月曜日の午前2時（UTC）に実行
   workflow_dispatch:             # 手動実行も可能
 
 jobs:
